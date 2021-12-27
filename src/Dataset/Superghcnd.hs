@@ -8,7 +8,8 @@ import Data.Attoparsec.Text
 import Data.Foldable
 import Data.Bifunctor (first)
 import qualified Data.Text as T
-import Database.PostgreSQL.Simple (ToRow)
+import Database.PostgreSQL.Simple (ToRow, FromRow)
+import qualified Data.Scientific as S
 import Data.Time.Calendar
 import GHC.Generics (Generic)
 
@@ -20,18 +21,19 @@ import GHC.Generics (Generic)
 data DlyRecord = DlyRecord
   { stationId :: T.Text
   , date :: Day
-  , element :: T.Text
+  , element :: T.Text -- measurement type
   , value :: Integer
   , mflag :: Maybe T.Text
   , qflag :: Maybe T.Text
   , sflag :: Maybe T.Text
-  } deriving (Show, Eq, Generic, ToRow)
+  } deriving (Show, Eq, Generic, ToRow, FromRow)
 
 --------------
 --- PARSER ---
 --------------
 
 runParseRecords = parseOnly parseRecords
+runParseRecord = parseOnly parseRecord
 
 parseRecords :: Parser [DlyRecord]
 parseRecords = parseRecord `sepBy` char '\n'
@@ -44,7 +46,7 @@ parseRecord = do
   comma
   element <- alphaNums
   comma
-  value <- fmap read $ many1 digit
+  value <- signed decimal
   comma
   mflag <- optional $ fmap T.singleton $ digit <|> letter
   comma
@@ -52,7 +54,6 @@ parseRecord = do
   comma
   sflag <- optional $ fmap T.singleton $ digit <|> letter
   comma
-  endOfLine
   pure $ DlyRecord stationId date element value mflag qflag sflag
 
 parseDate :: Parser Day

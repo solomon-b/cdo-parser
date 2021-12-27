@@ -11,14 +11,23 @@ executable rainwater-collector
   main-is:          Main.hs
   build-depends:
       base
+    , attoparsec
+    , bifunctors
     , cdo-parser
     , containers
     , mtl
     , postgresql-simple
+    , streamly
     , text
     , transformers
   hs-source-dirs:   app
   default-language: Haskell2010
+  default-extensions:
+    LambdaCase
+    OverloadedStrings
+    RecordWildCards
+    ScopedTypeVariables
+    TypeApplications
 
 library
   hs-source-dirs: src
@@ -30,7 +39,6 @@ library
     , mtl
     , postgresql-simple
     , scientific
-    , streamly
     , text
     , time
     , vector
