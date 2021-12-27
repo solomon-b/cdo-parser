@@ -1,25 +1,19 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric  #-}
-module Dataset.Stations where
+module Dataset.Stations ( Station(..)
+                        , runParseStation
+                        , parseStation
+                        ) where
 
-import Control.Applicative
-import Control.Monad
+import Control.Applicative ( Alternative((<|>), many) )
 import Data.Attoparsec.Text
-import Data.Foldable
-import Data.Bifunctor (first)
-import qualified Data.Text as T
-import qualified Data.Scientific as S
+    ( (<?>), double, space, anyChar, parseOnly, Parser )
+import Data.Text qualified as T
 import Database.PostgreSQL.Simple (ToRow)
-import Database.PostgreSQL.Simple.ToField
-import Data.Time.Calendar
+import Database.PostgreSQL.Simple.ToField (ToField(..), Action(..))
 import GHC.Generics (Generic)
 
 -------------
 --- TYPES ---
 -------------
--- ACW00011604  17.1167  -61.7833   10.1    ST JOHNS COOLIDGE FLD                       
--- ACW00011647  17.1333  -61.7833   19.2    ST JOHNS                                    
--- AE000041196  25.3330   55.5170   34.0    SHARJAH INTER. AIRP            GSN     41196
 
 data Point = Point Double Double
   deriving (Show, Eq, Generic)
@@ -41,13 +35,12 @@ data Station = Station
 --------------
 --- PARSER ---
 --------------
+-- ACW00011604  17.1167  -61.7833   10.1    ST JOHNS COOLIDGE FLD                       
+-- ACW00011647  17.1333  -61.7833   19.2    ST JOHNS                                    
+-- AE000041196  25.3330   55.5170   34.0    SHARJAH INTER. AIRP            GSN     41196
 
-runParseStations = parseOnly parseStations
+runParseStation :: T.Text -> Either String Station
 runParseStation = parseOnly parseStation
-
-parseStations :: Parser [Station]
-parseStations = parseStation `sepBy` char '\n'
--- AF000040930  35.3170   69.0170 3366.0    NORTH-SALANG                   GSN     40930
 
 parseStation :: Parser Station
 parseStation = do
@@ -69,9 +62,6 @@ parseStation = do
   space
   wmo <- fixedWidthWordOpt 5
   pure $ Station stationId (Point lat long) elevation state name gsn hcnCrn wmo
-
-fixedWidthInt :: Int -> Parser Int
-fixedWidthInt n = fmap read $ fixedWidth n digit
 
 fixedWidthWord :: Int -> Parser T.Text
 fixedWidthWord n = fmap T.pack (fixedWidth n anyChar)

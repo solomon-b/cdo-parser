@@ -1,23 +1,28 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric  #-}
-module Dataset.Superghcnd  where
+module Dataset.DailySummaries ( DlyRecord(..)
+                              , parseRecord
+                              , runParseRecord
+                              ) where
 
-import Control.Applicative
-import Control.Monad
+import Control.Applicative ( Alternative((<|>)), optional )
+import Control.Monad ( void )
 import Data.Attoparsec.Text
-import Data.Foldable
-import Data.Bifunctor (first)
-import qualified Data.Text as T
+    ( many1,
+      decimal,
+      digit,
+      letter,
+      signed,
+      char,
+      parseOnly,
+      Parser )
+import Data.Text qualified as T
+import Data.Time.Calendar ( Day, fromGregorian )
 import Database.PostgreSQL.Simple (ToRow, FromRow)
-import qualified Data.Scientific as S
-import Data.Time.Calendar
 import GHC.Generics (Generic)
 
 -------------
 --- TYPES ---
 -------------
 
--- ACW00011604,19490101,TMAX,289,,,X,
 data DlyRecord = DlyRecord
   { stationId :: T.Text
   , date :: Day
@@ -31,12 +36,10 @@ data DlyRecord = DlyRecord
 --------------
 --- PARSER ---
 --------------
+-- ACW00011604,19490101,TMAX,289,,,X,
 
-runParseRecords = parseOnly parseRecords
+runParseRecord :: T.Text -> Either String DlyRecord
 runParseRecord = parseOnly parseRecord
-
-parseRecords :: Parser [DlyRecord]
-parseRecords = parseRecord `sepBy` char '\n'
 
 parseRecord :: Parser DlyRecord
 parseRecord = do

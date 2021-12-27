@@ -7,46 +7,58 @@ author:             ssbothwell
 maintainer:         ssbothwell@gmail.com
 extra-source-files: CHANGELOG.md
 
-executable rainwater-collector
-  main-is:          Main.hs
-  build-depends:
-      base
-    , attoparsec
-    , bifunctors
-    , cdo-parser
-    , containers
-    , mtl
-    , postgresql-simple
-    , streamly
-    , text
-    , transformers
-  hs-source-dirs:   app
-  default-language: Haskell2010
+common common-settings
+  default-language:    Haskell2010
   default-extensions:
+    DeriveAnyClass
+    DeriveGeneric
+    ImportQualifiedPost
     LambdaCase
     OverloadedStrings
     RecordWildCards
     ScopedTypeVariables
     TypeApplications
 
-library
-  hs-source-dirs: src
+  ghc-options:
+    -Wall
+    -Wcpp-undef
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wpartial-fields
+    -Werror=missing-home-modules
+    -Wno-unused-do-bind
+
+common common-libraries
   build-depends:
     , base >= 2 && < 5
-    , aeson
     , attoparsec
-    , containers
-    , mtl
-    , postgresql-simple
     , scientific
+    , streamly >= 0.8.1
     , text
     , time
+    , containers
     , vector
+
+executable cdo-parser
+  import:
+    , common-libraries
+    , common-settings
+  main-is:          Main.hs
+  build-depends:
+    , cdo-parser
+    , postgresql-simple
+  hs-source-dirs:   app
+  default-language: Haskell2010
+
+library
+  import:
+    , common-libraries
+    , common-settings
+  hs-source-dirs: src
+  build-depends:
+    , postgresql-simple
   exposed-modules:
-    Dataset.Superghcnd
+    BatchProcessor
+    Dataset.DailySummaries
     Dataset.Stations
-  default-extensions:
-    LambdaCase
-    OverloadedStrings
-    ScopedTypeVariables
-    TypeApplications
