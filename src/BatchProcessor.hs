@@ -1,4 +1,5 @@
 module BatchProcessor ( DataInsertionContext(..)
+                      , ProcessorContext(..)
                       , insertBatch
                       , processInsertions
                       ) where
@@ -34,6 +35,8 @@ data DataInsertionContext a = DataInsertionContext
   , batchSize :: Int
   }
 
+data ProcessorContext = ProcessorContext { debugMode :: Bool}
+
 logParseErrors :: FilePath -> [(Int, String)] -> IO ()
 logParseErrors parseFailureFile errs = do
   putStrLn $ "The following rows failed to parse:"
@@ -58,8 +61,8 @@ insertBatch DataInsertionContext{..} conn xs = xs & fmap distribute & partitionE
     result <- try $ flip (DPS.executeMany conn) (fmap snd batch) query
     either (logInsertionErrors insertionFailureFile batchRange) (void . pure) result
  
-processInsertions :: DPS.ToRow a => DataInsertionContext a -> IO ()
-processInsertions ctx@DataInsertionContext{..} = do
+processInsertions :: DPS.ToRow a => ProcessorContext -> DataInsertionContext a -> IO ()
+processInsertions ProcessorContext{..} ctx@DataInsertionContext{..} = do
   conn <- DPS.connectPostgreSQL "postgres://postgres:password@localhost/ghcnd"
   handle <- openFile filepath ReadMode
 
@@ -71,7 +74,7 @@ processInsertions ctx@DataInsertionContext{..} = do
   Stream.unfold Handle.read handle
       & Unicode.decodeUtf8
       & Unicode.lines write
-      -- & Stream.take 2000
+      & (if debugMode then Stream.take batchSize else id)
       & Stream.map (Attoparsec.parseOnly parser)
       & Stream.zipWith (,) (Stream.enumerateFrom 0)
       & Stream.chunksOf batchSize Fold.toList

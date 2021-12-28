@@ -3,7 +3,7 @@
 module Main where
 
 import BatchProcessor
-    ( DataInsertionContext(..), processInsertions )
+    ( DataInsertionContext(..), processInsertions, ProcessorContext(..) )
 import Database.PostgreSQL.Simple.SqlQQ ( sql )
 import Dataset.DailySummaries ( DlyRecord, parseRecord )
 import Dataset.Stations ( Station, parseStation )
@@ -42,6 +42,7 @@ main = runOptionsParser >>= runProcessor
 
 runProcessor :: CDOOptions -> IO ()
 runProcessor opts@CDOOptions{..} =
-  case cdoDataset  of
-    Dailies -> processInsertions (dailiesContext opts) 
-    Stations -> processInsertions (stationsContext opts) 
+  let batchCtx = ProcessorContext cdoDebugMode
+  in case cdoDataset  of
+    Dailies -> processInsertions batchCtx (dailiesContext opts) 
+    Stations -> processInsertions batchCtx (stationsContext opts) 

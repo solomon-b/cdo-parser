@@ -12,6 +12,8 @@ data CDOOptions = CDOOptions
     -- ^ Defaults to /tmp
   , cdoBatchSize :: Int
     -- ^ Defaults to 2000
+  , cdoDebugMode :: Bool
+    -- ^ Defaults to False
   } deriving (Show)
 
 runOptionsParser :: IO CDOOptions
@@ -29,6 +31,7 @@ parseCDOOptions =
     <*> parseFilePath
     <*> parseLogPath
     <*> parseBatchSize
+    <*> parseDebugMode
 
 readMDataset :: Opt.ReadM Dataset
 readMDataset = Opt.eitherReader $ \case
@@ -41,21 +44,21 @@ parseDataset =
   let validOptions = "- stations\\n- dailies"
       helpMsg = "Specify the dataset you wish to process.\\nValid Options:\\n" <> validOptions
   in Opt.option readMDataset
-    ( Opt.long "dataset-name" <> Opt.short 'n' <> Opt.metavar "DATASET_NAME"
+    ( Opt.long "dataset-name" <> Opt.short 'n' <> Opt.metavar "FILE_NAME"
         <> Opt.help helpMsg
     )
 
 parseFilePath :: Opt.Parser FilePath
 parseFilePath =
   Opt.strOption
-    ( Opt.long "data-source" <> Opt.short 'd' <> Opt.metavar "DATA_FILE"
+    ( Opt.long "data-source" <> Opt.short 'd' <> Opt.metavar "FILE_PATH"
         <> Opt.help "The data file to process"
     )
 
 parseLogPath :: Opt.Parser FilePath
 parseLogPath =
   Opt.strOption
-    ( Opt.long "log-path" <> Opt.short 'l' <> Opt.metavar "LOG_PATH"
+    ( Opt.long "log-path" <> Opt.short 'l' <> Opt.metavar "FILE_PATH"
         <> Opt.value "/tmp"
         <> Opt.help "PATH to store log files. Defaults to '/tmp'"
     )
@@ -63,8 +66,15 @@ parseLogPath =
 parseBatchSize :: Opt.Parser Int
 parseBatchSize =
   Opt.option Opt.auto
-    ( Opt.long "batch-size" <> Opt.short 'b' <> Opt.metavar "BATCH_SIZE"
+    ( Opt.long "batch-size" <> Opt.short 'b' <> Opt.metavar "INTEGER"
         <> Opt.value 2000
-        <> Opt.help "Batch Size for writing entries to DB"
+        <> Opt.help "Batch Size for writing entries to DB. Defaults to 2000"
     )
 
+parseDebugMode :: Opt.Parser Bool
+parseDebugMode =
+  Opt.option Opt.auto
+    ( Opt.long "debug-mode" <> Opt.short 't' <> Opt.metavar "BOOLEAN"
+        <> Opt.value False
+        <> Opt.help "Run processor in debug mode where it only processes a single batch"
+    )
