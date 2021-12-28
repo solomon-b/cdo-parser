@@ -4,12 +4,13 @@ module BatchProcessor ( DataInsertionContext(..)
                       ) where
 
 import Control.Exception ( try )
-import Control.Monad ( when )
+import Control.Monad ( void, when )
 import Data.Attoparsec.Text qualified as Attoparsec
 import Data.Either ( partitionEithers )
 import Data.Function ( (&) )
 import Data.Foldable ( traverse_ )
 import Data.Text qualified as T
+import Data.Time.Clock.System qualified as Time
 import Database.PostgreSQL.Simple qualified as DPS
 import Streamly.Data.Fold qualified as Fold
 import Streamly.FileSystem.Handle qualified as Handle
@@ -30,34 +31,42 @@ data DataInsertionContext a = DataInsertionContext
   , parseFailureFile :: FilePath
   , filepath :: FilePath
   , parser :: Attoparsec.Parser a
+  , batchSize :: Int
   }
+
+logParseErrors :: FilePath -> [(Int, String)] -> IO ()
+logParseErrors parseFailureFile errs = do
+  putStrLn $ "The following rows failed to parse:"
+  traverse_ (appendFile parseFailureFile . flip mappend "\n" . show) errs
+  print errs
+
+logInsertionErrors :: FilePath -> String -> DPS.SqlError -> IO ()
+logInsertionErrors insertionFailureFile batchRange e = do
+   putStrLn $ "FAILURES OCCURED IN BATCH " <> batchRange
+   print e
+   appendFile insertionFailureFile (batchRange <> "\n")
 
 insertBatch :: DPS.ToRow a => DataInsertionContext a -> DPS.Connection -> [(Int, Either String a)] -> IO ()
 insertBatch DataInsertionContext{..} conn xs = xs & fmap distribute & partitionEithers & \case
   (errs, batch) -> do
-    when (not (null errs)) $ do
-      putStrLn $ "The following rows failed to parse:"
-      traverse_ (appendFile parseFailureFile . flip mappend "\n" . show) errs
-      print errs
+    when (not (null errs)) $ logParseErrors parseFailureFile errs
+
     let rowNums = fmap fst xs
         batchRange = show (minimum rowNums) <> " - " <> show (maximum rowNums)
     putStrLn $ "Attempting to insert successfully parsed records from batch " <> batchRange
 
     result <- try $ flip (DPS.executeMany conn) (fmap snd batch) query
-    case result of
-      Left (e :: DPS.SqlError) -> do
-        putStrLn $ "FAILURES OCCURED IN BATCH " <> batchRange
-        print e
-        appendFile insertionFailureFile (batchRange <> "\n")
-      Right _ -> pure ()
+    either (logInsertionErrors insertionFailureFile batchRange) (void . pure) result
  
 processInsertions :: DPS.ToRow a => DataInsertionContext a -> IO ()
 processInsertions ctx@DataInsertionContext{..} = do
   conn <- DPS.connectPostgreSQL "postgres://postgres:password@localhost/ghcnd"
   handle <- openFile filepath ReadMode
 
-  writeFile parseFailureFile ""
-  writeFile insertionFailureFile ""
+  timestamp <- show . Time.systemSeconds <$> Time.getSystemTime
+  let ctx' = ctx { insertionFailureFile = insertionFailureFile <> "-" <> timestamp
+                 , parseFailureFile = parseFailureFile <> "-" <> timestamp
+                 }
 
   Stream.unfold Handle.read handle
       & Unicode.decodeUtf8
@@ -65,6 +74,6 @@ processInsertions ctx@DataInsertionContext{..} = do
       -- & Stream.take 2000
       & Stream.map (Attoparsec.parseOnly parser)
       & Stream.zipWith (,) (Stream.enumerateFrom 0)
-      & Stream.chunksOf 1000 Fold.toList
-      & Stream.mapM (insertBatch ctx conn)
+      & Stream.chunksOf batchSize Fold.toList
+      & Stream.mapM (insertBatch ctx' conn)
       & Stream.drain
